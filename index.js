@@ -25,18 +25,31 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
-    const biodatasCollection = client.db("matchMingle").collection('biodatas')
+    const biodatasCollection = client.db("matchMingle").collection("biodatas");
 
-    app.get('/biodata', async(req, res) => {
-        const result = await biodatasCollection.find().toArray();
-        res. send(result);
-    })
+    app.get("/biodata", async (req, res) => {
+      const result = await biodatasCollection.find().toArray();
+      res.send(result);
+    });
 
-    app.post('/biodata', async(req, res) => {
-        const biodata = req.body;
-        const result = await biodatasCollection.insertOne(biodata);
-        res.send(result);
-    })
+    app.post("/biodata", async (req, res) => {
+      const biodata = req.body;
+      let newId = 1;
+      const lastBiodata = await biodatasCollection.findOne(
+        {},
+        { sort: { biodataId: -1 } }
+      );
+
+      if (lastBiodata && typeof lastBiodata.biodataId === "number") {
+        newId = lastBiodata.biodataId + 1;
+        console.log(newId);
+      }
+
+      const bioDatas = { ...biodata, biodataId: newId, createdAt: new Date() };
+
+      const result = await biodatasCollection.insertOne(bioDatas);
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
