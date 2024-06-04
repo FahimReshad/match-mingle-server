@@ -24,6 +24,20 @@ async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
+
+    const biodatasCollection = client.db("matchMingle").collection('biodatas')
+
+    app.get('/biodata', async(req, res) => {
+        const result = await biodatasCollection.find().toArray();
+        res. send(result);
+    })
+
+    app.post('/biodata', async(req, res) => {
+        const biodata = req.body;
+        const result = await biodatasCollection.insertOne(biodata);
+        res.send(result);
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
@@ -31,7 +45,7 @@ async function run() {
     );
   } finally {
     // Ensures that the client will close when you finish/error
-    await client.close();
+    // await client.close();
   }
 }
 run().catch(console.dir);
