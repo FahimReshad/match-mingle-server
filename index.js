@@ -35,19 +35,19 @@ async function run() {
       res.send(result);
     });
 
-    app.get('/users/admin/:email', async (req, res)=> {
+    app.get("/users/admin/:email", async (req, res) => {
       const email = req.params.email;
       // if(email !== req.decoded.email){
       //   return res.status(403).send({ message: 'forbidden access'})
       // }
-      const query = { email: email};
-      const user = await usersCollection.findOne(query)
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
       let admin = false;
-      if(user){
-        admin = user?.role === 'admin';
+      if (user) {
+        admin = user?.role === "admin";
       }
-      res.send({admin});
-    })
+      res.send({ admin });
+    });
 
     app.patch("/users/admin/:id", async (req, res) => {
       const id = req.params.id;
@@ -78,10 +78,17 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/biodata/details/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await biodatasCollection.find(query).toArray();
+      res.send(result);
+    });
+
     app.get("/biodata/:email", async (req, res) => {
-      // const email = req.params.email;
-      const cursor = biodatasCollection.find({ email: req.params.email });
-      const result = await cursor.toArray();
+      const email = req.params.email;
+      const query = { email: email };
+      const result = await biodatasCollection.find(query).toArray();
       res.send(result);
     });
 
