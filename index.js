@@ -5,7 +5,7 @@ require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 5000;
 
-// middleware
+// Middleware
 app.use(cors());
 app.use(express.json());
 
@@ -22,14 +22,12 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
     const usersCollection = client.db("matchMingle").collection("users");
     const biodatasCollection = client.db("matchMingle").collection("biodatas");
 
-    // users api:
-
+    // Users API
     app.get("/users", async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
@@ -37,14 +35,11 @@ async function run() {
 
     app.get("/users/admin/:email", async (req, res) => {
       const email = req.params.email;
-      // if(email !== req.decoded.email){
-      //   return res.status(403).send({ message: 'forbidden access'})
-      // }
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       let admin = false;
       if (user) {
-        admin = user?.role === "admin";
+        admin = user.role === "admin";
       }
       res.send({ admin });
     });
@@ -52,12 +47,12 @@ async function run() {
     app.patch("/users/admin/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      const updetedDoc = {
+      const updatedDoc = {
         $set: {
           role: "admin",
         },
       };
-      const result = await usersCollection.updateOne(filter, updetedDoc);
+      const result = await usersCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
 
@@ -66,26 +61,52 @@ async function run() {
       const query = { email: user.email };
       const existingUser = await usersCollection.findOne(query);
       if (existingUser) {
-        return res.send({ message: "user already exist", insertedId: null });
+        return res.send({ message: "User already exists", insertedId: null });
       }
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
 
-    // biodata api:
+    // Biodata API
     app.get("/biodata", async (req, res) => {
-      const result = await biodatasCollection.find().toArray();
+      const { age, bioDataType, permanentDivision } = req.query;
+      console.log(req.query);
+      const filter = {};
+
+
+      // if (age) {
+      //   // Using regex to find age range in string format.
+      //   filter.age = { $regex: new RegExp(age, "i") };
+      // }
+
+      if (age) {
+        // Parse the age range and create a filter condition
+        const [minAge, maxAge] = age.split("-").map(Number);
+        filter.age = { $gte: minAge, $lte: maxAge };
+    }
+
+
+      if (bioDataType) {
+        filter.bioDataType = bioDataType;
+      }
+      if (permanentDivision) {
+        filter.permanentDivision = permanentDivision;
+      }
+      console.log("Constructed filter:", filter);
+
+      const result = await biodatasCollection.find(filter).toArray();
+      console.log(result);
       res.send(result);
     });
 
     app.get("/biodata/details/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
-      const result = await biodatasCollection.find(query).toArray();
+      const result = await biodatasCollection.findOne(query);
       res.send(result);
     });
 
-    app.get("/biodata/:email", async (req, res) => {
+    app.get("/biodata/search/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const result = await biodatasCollection.find(query).toArray();
@@ -110,7 +131,6 @@ async function run() {
       res.send(result);
     });
 
-    // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
@@ -123,9 +143,9 @@ async function run() {
 run().catch(console.dir);
 
 app.get("/", (req, res) => {
-  res.send("match mingle server is running");
+  res.send("Match Mingle server is running");
 });
 
 app.listen(port, () => {
-  console.log(`match mingle is running on the port: ${port}`);
+  console.log(`Match Mingle is running on port: ${port}`);
 });
