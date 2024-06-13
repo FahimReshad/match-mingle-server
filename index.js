@@ -73,7 +73,6 @@ async function run() {
       console.log(req.query);
       const filter = {};
 
-
       // if (age) {
       //   // Using regex to find age range in string format.
       //   filter.age = { $regex: new RegExp(age, "i") };
@@ -83,8 +82,7 @@ async function run() {
         // Parse the age range and create a filter condition
         const [minAge, maxAge] = age.split("-").map(Number);
         filter.age = { $gte: minAge, $lte: maxAge };
-    }
-
+      }
 
       if (bioDataType) {
         filter.bioDataType = bioDataType;
@@ -106,6 +104,38 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/biodata/premium/:status", async (req, res) => {
+      const status = req.params.status;
+      const query = { status: status };
+      const result = await biodatasCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.patch("/biodata/search/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { status } = req.body;
+
+        const filter = { email: email };
+        const updatedDoc = {
+          $set: {
+            status: status,
+          },
+        };
+
+        const result = await biodatasCollection.updateOne(filter, updatedDoc);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).send("Biodata not found");
+        }
+
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send("An error occurred while updating the biodata.");
+      }
+    });
+
     app.get("/biodata/search/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
@@ -113,22 +143,99 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/biodata", async (req, res) => {
-      const biodata = req.body;
-      let newId = 1;
-      const lastBiodata = await biodatasCollection.findOne(
-        {},
-        { sort: { biodataId: -1 } }
-      );
+    // app.post("/biodata", async (req, res) => {
+    //   const biodata = req.body;
+    //   let newId = 1;
+    //   const lastBiodata = await biodatasCollection.findOne(
+    //     {},
+    //     { sort: { biodataId: -1 } }
+    //   );
 
-      if (lastBiodata && typeof lastBiodata.biodataId === "number") {
-        newId = lastBiodata.biodataId + 1;
+    //   if (lastBiodata && typeof lastBiodata.biodataId === "number") {
+    //     newId = lastBiodata.biodataId + 1;
+    //   }
+
+    //   const bioDatas = { ...biodata, biodataId: newId, createdAt: new Date() };
+
+    //   const result = await biodatasCollection.insertOne(bioDatas);
+    //   res.send(result);
+    // });
+
+    app.patch("/biodata/search/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { status } = req.body;
+
+        const filter = { email: email };
+        const updatedDoc = {
+          $set: {
+            status: status,
+          },
+        };
+
+        const result = await biodatasCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send("An error occurred while updating the biodata.");
       }
+    });
 
-      const bioDatas = { ...biodata, biodataId: newId, createdAt: new Date() };
+    app.put("/biodata", async (req, res) => {
+      try {
+        const biodata = req.body;
 
-      const result = await biodatasCollection.insertOne(bioDatas);
-      res.send(result);
+        const query = { email: biodata.email }; // Define query to find by email
+
+        // const isExist = await biodatasCollection.findOne(query);
+        // if(isExist){
+        //   if(biodata.status === "Requested"){
+        //     const result = await biodata.updateOne(query, {
+        //       $set: {status: biodata.status}
+        //     })
+        //     return res.send(result)
+        //   }
+        // }else{
+        //   return res.send(isExist)
+        // }
+
+        // Determine new biodataId if not existing
+        let newId = 1;
+        const lastBiodata = await biodatasCollection.findOne(
+          {},
+          { sort: { biodataId: -1 } }
+        );
+
+        if (lastBiodata && typeof lastBiodata.biodataId === "number") {
+          newId = lastBiodata.biodataId + 1;
+        }
+
+        // Set the update document with upsert option
+        const updatedDoc = {
+          $set: {
+            ...biodata,
+            createdAt: new Date(),
+            status: "verified",
+          },
+          $setOnInsert: {
+            biodataId: newId, // Only set biodataId on insert
+          },
+        };
+
+        const options = { upsert: true };
+
+        // Update the existing document or insert if it doesn't exist
+        const result = await biodatasCollection.updateOne(
+          query,
+          updatedDoc,
+          options
+        );
+
+        // Send response with the result
+        res.send(result);
+      } catch (error) {
+        res.status(500).send("An error occurred while processing the request.");
+      }
     });
 
     await client.db("admin").command({ ping: 1 });
