@@ -3,7 +3,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const app = express();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 
 // Middleware
@@ -28,6 +28,7 @@ async function run() {
     const usersCollection = client.db("matchMingle").collection("users");
     const biodatasCollection = client.db("matchMingle").collection("biodatas");
     const favoriteBiodataCollection = client.db("matchMingle").collection("favoriteBio");
+    const paymentsCollection = client.db("matchMingle").collection("payments");
 
     // Users API
     app.get("/users", async (req, res) => {
@@ -194,6 +195,13 @@ async function run() {
       res.send(result);
     });
 
+    app.delete("/payments/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await paymentsCollection.deleteOne(query);
+      res.send(result);
+    });
+
     app.patch("/biodata/search/:email", async (req, res) => {
       try {
         const email = req.params.email;
@@ -214,7 +222,27 @@ async function run() {
       }
     });
 
-    app.post('/favoriteBioData', async (req, res) => {
+    app.patch("/payments/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        const { status } = req.body;
+
+        const filter = { email: email };
+        const updatedDoc = {
+          $set: {
+            status: status,
+          },
+        };
+
+        const result = await paymentsCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send("An error occurred while updating the biodata.");
+      }
+    });
+
+    app.post("/favoriteBioData", async (req, res) => {
       try {
         const favoriteBio = req.body;
         const r = req.query?.email;
@@ -225,26 +253,26 @@ async function run() {
           {},
           { sort: { favoriteBioId: -1 } }
         );
-    
+
         if (lastBiodata && typeof lastBiodata.favoriteBioId === "number") {
           newId = lastBiodata.favoriteBioId + 1;
         }
-    
+
         // Remove _id field if it exists
-        if (favoriteBio.hasOwnProperty('_id')) {
+        if (favoriteBio.hasOwnProperty("_id")) {
           delete favoriteBio._id;
         }
-    
+
         // Add the new unique favoriteBioId
         favoriteBio.favoriteBioId = newId;
-    
+
         // Insert the new document
         const result = await favoriteBiodataCollection.insertOne(favoriteBio);
-    
+
         res.status(200).send(result);
       } catch (error) {
-        console.error('Error occurred while processing the request:', error);
-        res.status(500).send('An error occurred while processing the request.');
+        console.error("Error occurred while processing the request:", error);
+        res.status(500).send("An error occurred while processing the request.");
       }
     });
 
@@ -252,7 +280,7 @@ async function run() {
       try {
         const biodata = req.body;
 
-        const query = { email: biodata.email }; 
+        const query = { email: biodata.email };
 
         let newId = 1;
         const lastBiodata = await biodatasCollection.findOne(
@@ -292,23 +320,40 @@ async function run() {
       }
     });
 
-    app.post('/create-payment-intent', async(req, res) => {
-      const {price} = req.body;
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
       const amount = parseInt(price * 100);
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: "usd",
-        payment_method_types: ['card']
-      })
+        payment_method_types: ["card"],
+      });
       res.send({
-        clientSecret: paymentIntent.client_secret
-      })
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    app.get('/payments/:email', async(req, res) => {
+      const email = req.params.email;
+      const query = {email: email}
+      // if(req.params.email !== req.decoded.email){
+      //   return res.status(403).send({ message: 'forbidden access' })
+      // }
+      const result = await paymentsCollection.find(query).toArray();
+      res.send(result);
     })
 
+    app.get('/payments', async(req, res) => {
+      const result = await paymentsCollection.find().toArray();
+      res.send(result);
+    })
 
-
-    
-    
+    app.post('/payments', async(req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentsCollection.insertOne(payment);
+      console.log('payment info', payment);
+      res.send(paymentResult)
+    })
 
     await client.db("admin").command({ ping: 1 });
     console.log(
