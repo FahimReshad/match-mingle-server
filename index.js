@@ -27,8 +27,13 @@ async function run() {
 
     const usersCollection = client.db("matchMingle").collection("users");
     const biodatasCollection = client.db("matchMingle").collection("biodatas");
-    const favoriteBiodataCollection = client.db("matchMingle").collection("favoriteBio");
+    const favoriteBiodataCollection = client
+      .db("matchMingle")
+      .collection("favoriteBio");
     const paymentsCollection = client.db("matchMingle").collection("payments");
+    const successStoryCollection = client
+      .db("matchMingle")
+      .collection("successStory");
 
     // Users API
     app.get("/users", async (req, res) => {
@@ -138,8 +143,13 @@ async function run() {
 
     app.get("/biodata/premium/:status", async (req, res) => {
       const status = req.params.status;
+      const sortOrder = req.query.sort || "ascending";
+      const sortCriteria = { age: sortOrder === "ascending" ? 1 : -1 };
       const query = { status: status };
-      const result = await biodatasCollection.find(query).toArray();
+      const result = await biodatasCollection
+        .find(query)
+        .sort(sortCriteria)
+        .toArray();
       res.send(result);
     });
 
@@ -246,7 +256,6 @@ async function run() {
       try {
         const favoriteBio = req.body;
         const r = req.query?.email;
-        console.log(r);
         // Generate a new unique ID for the new biodata
         let newId = 1;
         const lastBiodata = await favoriteBiodataCollection.findOne(
@@ -320,6 +329,50 @@ async function run() {
       }
     });
 
+    app.put("/successStory", async (req, res) => {
+      try {
+        const biodata = req.body;
+
+        const query = { email: biodata.email };
+
+        let newId = 1;
+        const lastBiodata = await successStoryCollection.findOne(
+          {},
+          { sort: { biodataId: -1 } }
+        );
+
+        if (lastBiodata && typeof lastBiodata.biodataId === "number") {
+          newId = lastBiodata.biodataId + 1;
+        }
+
+        // Set the update document with upsert option
+        const updatedDoc = {
+          $set: {
+            ...biodata,
+            createdAt: new Date(),
+            status: "verified",
+          },
+          $setOnInsert: {
+            biodataId: newId, // Only set biodataId on insert
+          },
+        };
+
+        const options = { upsert: true };
+
+        // Update the existing document or insert if it doesn't exist
+        const result = await successStoryCollection.updateOne(
+          query,
+          updatedDoc,
+          options
+        );
+
+        // Send response with the result
+        res.send(result);
+      } catch (error) {
+        res.status(500).send("An error occurred while processing the request.");
+      }
+    });
+
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100);
@@ -333,27 +386,27 @@ async function run() {
       });
     });
 
-    app.get('/payments/:email', async(req, res) => {
+    app.get("/payments/:email", async (req, res) => {
       const email = req.params.email;
-      const query = {email: email}
+      const query = { email: email };
       // if(req.params.email !== req.decoded.email){
       //   return res.status(403).send({ message: 'forbidden access' })
       // }
       const result = await paymentsCollection.find(query).toArray();
       res.send(result);
-    })
+    });
 
-    app.get('/payments', async(req, res) => {
+    app.get("/payments", async (req, res) => {
       const result = await paymentsCollection.find().toArray();
       res.send(result);
-    })
+    });
 
-    app.post('/payments', async(req, res) => {
+    app.post("/payments", async (req, res) => {
       const payment = req.body;
       const paymentResult = await paymentsCollection.insertOne(payment);
-      console.log('payment info', payment);
-      res.send(paymentResult)
-    })
+      console.log("payment info", payment);
+      res.send(paymentResult);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
