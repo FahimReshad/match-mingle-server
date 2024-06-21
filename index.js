@@ -2,12 +2,18 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
+const jwt = require('jsonwebtoken');
 const app = express();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173"],
+    credentials: true,
+  })
+);
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.rpkd5x3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -35,14 +41,52 @@ async function run() {
       .db("matchMingle")
       .collection("successStory");
 
+    //creating Token
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      res.send({ token });
+    });
+
+    // middlewares:
+    const verifyToken = (req, res, next) => {
+      // console.log('inside token', req.headers.authorization);
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+        if (error) {
+          return res.status(401).send({ message: "forbidden access" });
+        }
+        req.decoded = decoded;
+        next();
+      });
+    };
+
+    // const verifyAdmin = async (req, res, next) => {
+    //   const email = req.decoded.email;
+    //   const query = { email: email };
+    //   const user = await usersCollection.findOne(query);
+    //   const isAdmin = user?.role === "admin";
+    //   if (!isAdmin) {
+    //     return res.status(403).send("forbidden access");
+    //   }
+    //   next();
+    // };
+
     // Users API
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
 
     app.get("/users/admin/:email", async (req, res) => {
       const email = req.params.email;
+      
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       let admin = false;
@@ -63,17 +107,21 @@ async function run() {
       res.send({ status });
     });
 
-    app.patch("/users/admin/:id", async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          role: "admin",
-        },
-      };
-      const result = await usersCollection.updateOne(filter, updatedDoc);
-      res.send(result);
-    });
+    app.patch(
+      "/users/admin/:id",
+      verifyToken,
+      async (req, res) => {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            role: "admin",
+          },
+        };
+        const result = await usersCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+      }
+    );
 
     app.patch("/users/premium/:id", async (req, res) => {
       const id = req.params.id;
@@ -120,10 +168,7 @@ async function run() {
       if (permanentDivision) {
         filter.permanentDivision = permanentDivision;
       }
-      console.log("Constructed filter:", filter);
-
       const result = await biodatasCollection.find(filter).toArray();
-      console.log(result);
       res.send(result);
     });
 
@@ -138,6 +183,13 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await biodatasCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.get("/biodata/:bioDataType", async (req, res) => {
+      const bioDataType = req.params.bioDataType;
+      const query = { bioDataType: bioDataType };
+      const result = await biodatasCollection.find(query).toArray();
       res.send(result);
     });
 
@@ -327,6 +379,18 @@ async function run() {
       } catch (error) {
         res.status(500).send("An error occurred while processing the request.");
       }
+    });
+
+    app.get("/successStory", async (req, res) => {
+      const sortOrder = req.query.sort || "ascending";
+      const sortCriteria = {
+        dateOfMarriage: sortOrder === "ascending" ? 1 : -1,
+      };
+      const result = await successStoryCollection
+        .find()
+        .sort(sortCriteria)
+        .toArray();
+      res.send(result);
     });
 
     app.put("/successStory", async (req, res) => {
