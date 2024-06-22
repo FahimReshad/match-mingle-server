@@ -10,7 +10,11 @@ const port = process.env.PORT || 5000;
 // Middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://match-mingle-7cc0f.web.app"],
+    origin: [
+      "http://localhost:5173",
+      "https://match-mingle-7cc0f.web.app",
+      "https://match-mingle-7cc0f.firebaseapp.com",
+    ],
     credentials: true,
   })
 );
