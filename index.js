@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 const app = express();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
@@ -10,7 +10,7 @@ const port = process.env.PORT || 5000;
 // Middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", "https://match-mingle-7cc0f.web.app"],
     credentials: true,
   })
 );
@@ -29,7 +29,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const usersCollection = client.db("matchMingle").collection("users");
     const biodatasCollection = client.db("matchMingle").collection("biodatas");
@@ -57,7 +57,6 @@ async function run() {
         return res.status(401).send({ message: "unauthorized access" });
       }
       const token = req.headers.authorization.split(" ")[1];
-
       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
         if (error) {
           return res.status(401).send({ message: "forbidden access" });
@@ -67,26 +66,14 @@ async function run() {
       });
     };
 
-    // const verifyAdmin = async (req, res, next) => {
-    //   const email = req.decoded.email;
-    //   const query = { email: email };
-    //   const user = await usersCollection.findOne(query);
-    //   const isAdmin = user?.role === "admin";
-    //   if (!isAdmin) {
-    //     return res.status(403).send("forbidden access");
-    //   }
-    //   next();
-    // };
-
     // Users API
-    app.get("/users", verifyToken, async (req, res) => {
+    app.get("/users", async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
 
     app.get("/users/admin/:email", async (req, res) => {
       const email = req.params.email;
-      
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       let admin = false;
@@ -107,21 +94,17 @@ async function run() {
       res.send({ status });
     });
 
-    app.patch(
-      "/users/admin/:id",
-      verifyToken,
-      async (req, res) => {
-        const id = req.params.id;
-        const filter = { _id: new ObjectId(id) };
-        const updatedDoc = {
-          $set: {
-            role: "admin",
-          },
-        };
-        const result = await usersCollection.updateOne(filter, updatedDoc);
-        res.send(result);
-      }
-    );
+    app.patch("/users/admin/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await usersCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
 
     app.patch("/users/premium/:id", async (req, res) => {
       const id = req.params.id;
@@ -150,18 +133,11 @@ async function run() {
     app.get("/biodata", async (req, res) => {
       const { age, bioDataType, permanentDivision } = req.query;
       const filter = {};
-
-      // if (age) {
-      //   // Using regex to find age range in string format.
-      //   filter.age = { $regex: new RegExp(age, "i") };
-      // }
-
       if (age) {
         // Parse the age range and create a filter condition
         const [minAge, maxAge] = age.split("-").map(Number);
         filter.age = { $gte: minAge, $lte: maxAge };
       }
-
       if (bioDataType) {
         filter.bioDataType = bioDataType;
       }
@@ -209,20 +185,16 @@ async function run() {
       try {
         const email = req.params.email;
         const { status } = req.body;
-
         const filter = { email: email };
         const updatedDoc = {
           $set: {
             status: status,
           },
         };
-
         const result = await biodatasCollection.updateOne(filter, updatedDoc);
-
         if (result.matchedCount === 0) {
           return res.status(404).send("Biodata not found");
         }
-
         res.send(result);
       } catch (error) {
         console.error(error);
@@ -268,14 +240,12 @@ async function run() {
       try {
         const email = req.params.email;
         const { status } = req.body;
-
         const filter = { email: email };
         const updatedDoc = {
           $set: {
             status: status,
           },
         };
-
         const result = await biodatasCollection.updateOne(filter, updatedDoc);
         res.send(result);
       } catch (error) {
@@ -288,7 +258,6 @@ async function run() {
       try {
         const email = req.params.email;
         const { status } = req.body;
-
         const filter = { email: email };
         const updatedDoc = {
           $set: {
@@ -314,22 +283,17 @@ async function run() {
           {},
           { sort: { favoriteBioId: -1 } }
         );
-
         if (lastBiodata && typeof lastBiodata.favoriteBioId === "number") {
           newId = lastBiodata.favoriteBioId + 1;
         }
-
         // Remove _id field if it exists
         if (favoriteBio.hasOwnProperty("_id")) {
           delete favoriteBio._id;
         }
-
         // Add the new unique favoriteBioId
         favoriteBio.favoriteBioId = newId;
-
         // Insert the new document
         const result = await favoriteBiodataCollection.insertOne(favoriteBio);
-
         res.status(200).send(result);
       } catch (error) {
         console.error("Error occurred while processing the request:", error);
@@ -340,19 +304,15 @@ async function run() {
     app.put("/biodata", async (req, res) => {
       try {
         const biodata = req.body;
-
         const query = { email: biodata.email };
-
         let newId = 1;
         const lastBiodata = await biodatasCollection.findOne(
           {},
           { sort: { biodataId: -1 } }
         );
-
         if (lastBiodata && typeof lastBiodata.biodataId === "number") {
           newId = lastBiodata.biodataId + 1;
         }
-
         // Set the update document with upsert option
         const updatedDoc = {
           $set: {
@@ -364,16 +324,13 @@ async function run() {
             biodataId: newId, // Only set biodataId on insert
           },
         };
-
         const options = { upsert: true };
-
         // Update the existing document or insert if it doesn't exist
         const result = await biodatasCollection.updateOne(
           query,
           updatedDoc,
           options
         );
-
         // Send response with the result
         res.send(result);
       } catch (error) {
@@ -396,19 +353,15 @@ async function run() {
     app.put("/successStory", async (req, res) => {
       try {
         const biodata = req.body;
-
         const query = { email: biodata.email };
-
         let newId = 1;
         const lastBiodata = await successStoryCollection.findOne(
           {},
           { sort: { biodataId: -1 } }
         );
-
         if (lastBiodata && typeof lastBiodata.biodataId === "number") {
           newId = lastBiodata.biodataId + 1;
         }
-
         // Set the update document with upsert option
         const updatedDoc = {
           $set: {
@@ -420,16 +373,13 @@ async function run() {
             biodataId: newId, // Only set biodataId on insert
           },
         };
-
         const options = { upsert: true };
-
         // Update the existing document or insert if it doesn't exist
         const result = await successStoryCollection.updateOne(
           query,
           updatedDoc,
           options
         );
-
         // Send response with the result
         res.send(result);
       } catch (error) {
@@ -453,9 +403,6 @@ async function run() {
     app.get("/payments/:email", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
-      // if(req.params.email !== req.decoded.email){
-      //   return res.status(403).send({ message: 'forbidden access' })
-      // }
       const result = await paymentsCollection.find(query).toArray();
       res.send(result);
     });
@@ -468,14 +415,13 @@ async function run() {
     app.post("/payments", async (req, res) => {
       const payment = req.body;
       const paymentResult = await paymentsCollection.insertOne(payment);
-      console.log("payment info", payment);
       res.send(paymentResult);
     });
 
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
